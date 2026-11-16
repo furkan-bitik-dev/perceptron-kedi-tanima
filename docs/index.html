@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Perceptron ile Kedi Tanıma</title>
+  <style>
+    body { font-family: Segoe UI, Arial, sans-serif; background: #f4f5f7; color: #222; margin: 0; }
+    main { max-width: 720px; margin: 32px auto; padding: 0 16px; }
+    h1 { font-size: 24px; margin-bottom: 4px; }
+    .alt { color: #666; margin-top: 0; }
+    .kart { background: #fff; border-radius: 10px; padding: 20px; margin-top: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    .sonuc { font-size: 30px; font-weight: 700; margin: 0; }
+    .kedi { color: #1a7f3c; } .degil { color: #b3261e; }
+    .cubuk { background: #e3e5ea; border-radius: 6px; height: 14px; margin: 10px 0; }
+    .cubuk div { background: #2f5fd0; height: 14px; border-radius: 6px; }
+    .resimler { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 14px; }
+    .resimler img, .resimler canvas { height: 190px; border-radius: 6px; border: 1px solid #ddd; }
+    .resimler canvas { width: 190px; image-rendering: pixelated; }
+    figure { margin: 0; } figcaption { font-size: 13px; color: #666; margin-top: 4px; }
+    .ornekler { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .ornekler img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; cursor: pointer; border: 2px solid transparent; }
+    .ornekler img:hover { border-color: #2f5fd0; }
+    li { margin-bottom: 6px; }
+    a { color: #2f5fd0; }
+    #sonucKart { display: none; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Perceptron ile Kedi Tanıma</h1>
+  <p class="alt">Tek nöron · sigmoid · MSE · SGD · numpy ile sıfırdan ·
+    <a href="https://github.com/furkan-bitik-dev/perceptron-kedi-tanima">Kaynak kod</a></p>
+
+  <div class="kart">
+    <p><strong>Bir resim yükle:</strong></p>
+    <input type="file" id="dosya" accept="image/*">
+    <p style="margin-bottom:0">ya da bir örneğe tıkla:</p>
+    <div class="ornekler">
+      <img src="ornekler/a1.jpg" alt="örnek 1"><img src="ornekler/a2.jpg" alt="örnek 2">
+      <img src="ornekler/a3.jpg" alt="örnek 3"><img src="ornekler/a4.jpg" alt="örnek 4">
+      <img src="ornekler/a5.jpg" alt="örnek 5">
+    </div>
+  </div>
+
+  <div class="kart" id="sonucKart">
+    <p class="sonuc" id="etiket"></p>
+    <p>Kedi olasılığı: <strong id="olasilik"></strong> (%50'nin üstü kedi sayılıyor)</p>
+    <div class="cubuk"><div id="cubuk"></div></div>
+    <p id="yorum"></p>
+    <div class="resimler">
+      <figure><img id="orijinal" alt="Yüklenen resim"><figcaption>Yüklenen resim</figcaption></figure>
+      <figure><canvas id="kucuk" width="64" height="64"></canvas><figcaption>Modelin gördüğü 64×64 hali</figcaption></figure>
+    </div>
+  </div>
+
+  <div class="kart">
+    <strong>Model nasıl eğitildi?</strong>
+    <ul id="yorumlar"></ul>
+    <p style="font-size:13px;color:#666;margin-bottom:0">Model Python'da eğitildi. Bu sayfa öğrenilen ağırlıkları
+      kullanarak tahmini doğrudan tarayıcında yapıyor; yüklediğin resim hiçbir yere gönderilmiyor.</p>
+  </div>
+</main>
+
+<script src="perceptron.js"></script>
+<script>
+  let model = null;
+  fetch("model.json").then(r => r.json()).then(m => {
+    model = m;
+    document.getElementById("yorumlar").innerHTML = m.yorumlar.map(s => `<li>${s}</li>`).join("");
+  });
+
+  function siniflandir(kaynak) {
+    const img = new Image();
+    img.onload = () => {
+      // Resmi kendi boyutunda bir tuvale çizip piksellerini RGB olarak alıyorum
+      const tuval = document.createElement("canvas");
+      tuval.width = img.naturalWidth; tuval.height = img.naturalHeight;
+      const ctx = tuval.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const rgba = ctx.getImageData(0, 0, tuval.width, tuval.height).data;
+      const rgb = new Uint8Array(tuval.width * tuval.height * 3);
+      for (let i = 0, j = 0; i < rgba.length; i += 4) { rgb[j++] = rgba[i]; rgb[j++] = rgba[i + 1]; rgb[j++] = rgba[i + 2]; }
+
+      const kucuk = resmi64eIndir(rgb, tuval.height, tuval.width);
+      const p = kediOlasiligi(model, kucuk);
+      const kedi = p > 0.5;
+
+      document.getElementById("sonucKart").style.display = "block";
+      const etiket = document.getElementById("etiket");
+      etiket.textContent = kedi ? "KEDİ" : "KEDİ DEĞİL";
+      etiket.className = "sonuc " + (kedi ? "kedi" : "degil");
+      document.getElementById("olasilik").textContent = "%" + Math.round(p * 100);
+      document.getElementById("cubuk").style.width = (p * 100) + "%";
+      document.getElementById("yorum").textContent = olasilikYorumla(p);
+      document.getElementById("orijinal").src = kaynak;
+
+      // 64x64 halini de gösteriyorum
+      const kc = document.getElementById("kucuk").getContext("2d");
+      const veri = kc.createImageData(64, 64);
+      for (let k = 0; k < 64 * 64; k++) {
+        veri.data[k * 4] = kucuk[k * 3]; veri.data[k * 4 + 1] = kucuk[k * 3 + 1];
+        veri.data[k * 4 + 2] = kucuk[k * 3 + 2]; veri.data[k * 4 + 3] = 255;
+      }
+      kc.putImageData(veri, 0, 0);
+    };
+    img.src = kaynak;
+  }
+
+  document.getElementById("dosya").addEventListener("change", e => {
+    const f = e.target.files[0];
+    if (f && model) siniflandir(URL.createObjectURL(f));
+  });
+  document.querySelectorAll(".ornekler img").forEach(el =>
+    el.addEventListener("click", () => model && siniflandir(el.getAttribute("src"))));
+</script>
+</body>
+</html>
