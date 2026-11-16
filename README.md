@@ -174,6 +174,67 @@ Ortalama doğruluk yaklaşık 5 puan arttı ve kazancın çoğu kedileri bilmekt
 
 Denediğim ama işe yaramayan şeyler: piksel bazında standardizasyon (z-score), gri tonlamaya çevirme ve resmi 32×32'ye küçültme. Hepsi doğruluğu düşürdü.
 
+### Ayarlar neden böyle seçildi?
+
+Bütün ayarlar `perceptron_kedi.py` dosyasında. Kullanılan değerler 202. satırda: `model(X_cok, y_cok, epoch_sayisi=40, ogrenme_orani=0.001, azalma=0.3)`.
+
+| Ayar | Değer | Kodda |
+|---|---|---|
+| Ağırlıklar | 12288 tane w + 1 bias b, başlangıçta hepsi 0 | satır 68–69 |
+| Başlangıç öğrenme oranı | 0.001 | satır 202 |
+| Öğrenme oranının azalması | `adım = 0.001 / (1 + 0.3 · epoch)` | satır 108 |
+| Epoch sayısı | 40 | satır 104, 202 |
+| Karar eşiği | 0.5 | satır 123, 186 |
+
+**Neden ağırlıklar sıfırdan başlıyor?** Başlangıçta z = 0 ve sigmoid 0.5 veriyor: model her resme "yarı yarıya" diyor, yani hiçbir ön yargısı yok. Çok katmanlı ağlarda sıfırla başlatmak bütün nöronların aynı şeyi öğrenmesine yol açar; tek nöronda böyle bir sorun yok.
+
+**Neden 0.001?** Bir güncellemenin ne kadar büyük olduğunu hesaplayabiliyoruz. Bir resmin 12288 sayısının karelerinin toplamı ortalama **2851**. SGD tek bir resimle güncelleme yaptığında o resmin z değeri yaklaşık `öğrenme oranı × ortak × 2851` kadar değişiyor. Başlangıçta `ortak` yaklaşık 0.25:
+
+| Öğrenme oranı | İlk güncellemede z'nin değişimi | Sonuç (ilk sürümde denendi) |
+|---|---|---|
+| 0.05 | ≈ 35.6 | Sigmoid hemen 0'a ya da 1'e yapışıyor, `ŷ(1 − ŷ)` sıfırlanıyor, türev ölüyor. Model öğrenemiyor (test %36). |
+| 0.01 | ≈ 7.1 | sigmoid(7) = 0.999. Model tek bir resme aşırı tepki veriyor (test %56). |
+| **0.001** | **≈ 0.7** | sigmoid 0.5'ten 0.67'ye çıkıyor: anlamlı ama aşırı olmayan bir adım (test %70–74). |
+
+**Neden öğrenme oranını aşama aşama düşürüyoruz?**
+SGD her adımda tek bir resme bakıyor. Model iyi bir noktaya yaklaştığında her resim ağırlıkları kendi yönüne çekiyor: kedi resmi bir yöne, kedi olmayan başka bir yöne. Adım sabit kalırsa ağırlıklar iyi noktanın etrafında zıplayıp durur. Adımlar küçüldükçe bu zıplamalar da küçülür ve model oturur.
+
+| Epoch | 1 | 5 | 10 | 20 | 40 |
+|---|---|---|---|---|---|
+| Adım | 0.001 | 0.00045 | 0.00027 | 0.00015 | 0.00008 |
+
+Başta büyük adımlarla hızlı öğreniyor; 40. epoch'ta adım başlangıcın yaklaşık %8'ine iniyor.
+
+Aynı veri ve aynı başlangıçla, sabit ve azalan oranı karşılaştırdım (40 epoch):
+
+| | Sabit oran (0.001) | Azalan oran |
+|---|---|---|
+| Kaybın yükseldiği epoch sayısı | 22 / 39 | 11 / 39 |
+| En büyük kayıp sıçraması | 0.06 (30. epoch'ta 0.0765 → 0.1248) | 0.01 |
+| Eğitim doğruluğu | %96.2 | %86.6 |
+| Test doğruluğu | %68 | **%74** |
+| Ağırlık vektörünün büyüklüğü ‖w‖ | 1.69 | 0.68 |
+
+Bu tablo iki faydayı gösteriyor:
+1. **Kararlılık:** Kayıp daha az zıplıyor ve model iyi bulduğu noktadan uzaklaşmıyor.
+2. **Daha az ezber:** Adımlar küçüldüğü için ağırlıklar aşırı büyüyemiyor (‖w‖ 1.69'dan 0.68'e indi). Sabit oranda model eğitim resimlerini %96 doğrulukla ezberliyor ama testte %68'de kalıyor. Azalan oranda eğitim ile test birbirine yaklaşıyor. Bu, erken durdurma ya da düzenlileştirmeye benzer bir etki.
+
+Teorik olarak SGD'nin bir noktaya oturması için adımların iki şartı sağlaması gerekir: toplamları sonsuz olmalı ki model gereken yere kadar gidebilsin, karelerinin toplamı sonlu olmalı ki gürültü sönsün (Robbins–Monro şartları). `1 / (1 + 0.3 · epoch)` biçimindeki adımlar ikisini de sağlıyor.
+
+**Neden 40 epoch ve neden 0.3 azalma?** Her ayarı 6 farklı rastgele başlangıçla denedim:
+
+| Ayar | Ortalama test doğruluğu | Çalıştırmalar arası oynama |
+|---|---|---|
+| Azalma 0.3, 20 epoch | %78 | ±3.1 |
+| Azalma 0.3, 30 epoch | %75 | ±5.1 |
+| **Azalma 0.3, 40 epoch** | **%77** | **±2.8** |
+| Azalma 0.1, 40 epoch | %77 | ±3.8 |
+| Azalma yok, 40 epoch | %77 | ±5.6 |
+
+Doğruluklar birbirine yakın; 40 epoch ve 0.3 azalmayı, sonuçlar en az oynadığı için seçtim. 40. epoch'ta adım o kadar küçük ki daha fazla epoch neredeyse hiçbir şeyi değiştirmiyor.
+
+**Neden eşik 0.5?** Sigmoid'in çıktısı kedi olma olasılığı; 0.5 "yarı yarıya" demek. Sınıfları dengelediğimiz için iki hataya da eşit davranan doğal eşik bu.
+
 ## 7. Sonuçlar ve yorumu
 
 Ayarlar: 40 epoch, başlangıç öğrenme oranı 0.001, azalma 0.3. Sabit seed kullanıldığı için sonuçlar her çalıştırmada aynıdır.
