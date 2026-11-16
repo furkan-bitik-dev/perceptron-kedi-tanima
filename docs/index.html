@@ -62,10 +62,10 @@
   </div>
 </main>
 
-<script src="perceptron.js"></script>
+<script src="perceptron.js?v=2"></script>
 <script>
   let model = null;
-  fetch("model.json").then(r => r.json()).then(m => {
+  fetch("model.json", { cache: "no-cache" }).then(r => r.json()).then(m => {
     model = m;
     document.getElementById("yorumlar").innerHTML = m.yorumlar.map(s => `<li>${s}</li>`).join("");
   });
