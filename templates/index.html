@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Perceptron – Kedi mi?</title>
+  <style>
+    body { font-family: Segoe UI, Arial, sans-serif; background: #f4f5f7; color: #222; margin: 0; }
+    main { max-width: 720px; margin: 32px auto; padding: 0 16px; }
+    h1 { font-size: 24px; margin-bottom: 4px; }
+    .alt { color: #666; margin-top: 0; }
+    .kart { background: #fff; border-radius: 10px; padding: 20px; margin-top: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    button { background: #2f5fd0; color: #fff; border: 0; border-radius: 6px; padding: 10px 18px; font-size: 15px; cursor: pointer; }
+    .sonuc { font-size: 30px; font-weight: 700; margin: 0; }
+    .kedi { color: #1a7f3c; } .degil { color: #b3261e; }
+    .cubuk { background: #e3e5ea; border-radius: 6px; height: 14px; margin: 10px 0; }
+    .cubuk div { background: #2f5fd0; height: 14px; border-radius: 6px; }
+    .resimler { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 14px; }
+    .resimler img { height: 190px; border-radius: 6px; border: 1px solid #ddd; }
+    .resimler .piksel { image-rendering: pixelated; }
+    figure { margin: 0; } figcaption { font-size: 13px; color: #666; margin-top: 4px; }
+    .hata { color: #b3261e; font-weight: 600; }
+    li { margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Perceptron ile Kedi Tanıma</h1>
+  <p class="alt">Module 16 Lab · tek nöron · sigmoid · MSE · SGD</p>
+
+  <div class="kart">
+    <form method="post" enctype="multipart/form-data">
+      <p><strong>Bir resim yükle:</strong></p>
+      <input type="file" name="resim" accept="image/*" required>
+      <button type="submit">Sınıflandır</button>
+    </form>
+    {% if hata %}<p class="hata">{{ hata }}</p>{% endif %}
+  </div>
+
+  {% if sonuc %}
+  <div class="kart">
+    <p class="sonuc {{ 'kedi' if sonuc.etiket == 'KEDİ' else 'degil' }}">{{ sonuc.etiket }}</p>
+    <p>Kedi olasılığı: <strong>%{{ sonuc.olasilik }}</strong> (0.5'in üstü kedi sayılıyor)</p>
+    <div class="cubuk"><div style="width: {{ sonuc.olasilik }}%"></div></div>
+    <p>{{ sonuc.yorum }}</p>
+    <div class="resimler">
+      <figure><img src="{{ sonuc.orijinal }}" alt="Yüklenen resim"><figcaption>Yüklediğim resim</figcaption></figure>
+      <figure><img class="piksel" src="{{ sonuc.kucuk }}" alt="64x64 hali"><figcaption>Modelin gördüğü 64×64 hali</figcaption></figure>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="kart">
+    <strong>Model nasıl eğitildi?</strong>
+    <ul>
+      {% for satir in egitim_yorumlari %}<li>{{ satir }}</li>{% endfor %}
+    </ul>
+  </div>
+</main>
+</body>
+</html>
