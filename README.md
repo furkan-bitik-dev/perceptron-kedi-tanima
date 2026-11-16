@@ -19,8 +19,9 @@ Model hazır bir kütüphane (scikit-learn, keras vb.) kullanmadan, sadece **num
 3. [Çalıştırma](#3-çalıştırma)
 4. [Perceptron nasıl çalışıyor?](#4-perceptron-nasıl-çalışıyor)
 5. [Kodun yapısı](#5-kodun-yapısı)
-6. [Sonuçlar ve yorumu](#6-sonuçlar-ve-yorumu)
-7. [Canlı demo nasıl çalışıyor?](#7-canlı-demo-nasıl-çalışıyor)
+6. [Sonuçları nasıl iyileştirdim?](#6-sonuçları-nasıl-iyileştirdim)
+7. [Sonuçlar ve yorumu](#7-sonuçlar-ve-yorumu)
+8. [Canlı demo nasıl çalışıyor?](#8-canlı-demo-nasıl-çalışıyor)
 
 ---
 
@@ -126,13 +127,14 @@ Perceptron tek bir yapay nörondur ve üç adımda tahmin yapar:
 
 | Fonksiyon | Görevi |
 |---|---|
-| `veriyi_yukle()` | `.h5` dosyalarını okur ve ön işlemden geçirir |
+| `veriyi_yukle()` | `.h5` dosyalarını okur |
+| `veriyi_cogalt()` | Eğitim resimlerini yatay çevirir ve kedi resimlerini çoğaltarak sınıfları dengeler |
 | `on_isleme()` | Resimleri 12288'lik vektöre düzleştirir, 255'e böler |
 | `sigmoid()` | Aktivasyon fonksiyonu |
 | `parametreleri_baslat()` | w ve b'yi sıfırla başlatır |
 | `kayip_hesapla()` | MSE kaybını hesaplar |
 | `sgd_guncelle()` | Tek bir resimle gradyanı bulur, w ve b'yi günceller |
-| `model()` | Bu üç fonksiyonu birleştirip modeli eğitir |
+| `model()` | Bu üç fonksiyonu birleştirip modeli eğitir (azalan öğrenme oranıyla) |
 | `dogruluk()` | Doğruluğu hesaplar |
 | `resmi_hazirla()` | Dışarıdan gelen resmi PIL ile açar, scipy ile 64×64'e küçültür |
 | `resmi_siniflandir()` | Resim için kedi olasılığını döndürür |
@@ -151,61 +153,76 @@ Lab isterlerinin karşılıkları:
 | Kaggle verisiyle kedi tanıma | `veriyi_yukle()`, `egit()`, `dogruluk()` |
 | PIL ve scipy ile kendi resminle test | `resmi_hazirla()`, `resmi_siniflandir()`, web uygulaması |
 
-## 6. Sonuçlar ve yorumu
+## 6. Sonuçları nasıl iyileştirdim?
 
-Ayarlar: 50 epoch, öğrenme oranı 0.001. Sabit seed kullanıldığı için sonuçlar her çalıştırmada aynıdır.
+İlk sürüm test setinde %70 doğruluk veriyordu ve yanlışlarının çoğu, kedi resimlerine "kedi değil" demesiydi. Modelin yapısına (tek nöron, sigmoid, MSE, SGD) dokunmadan üç değişiklik yaptım:
+
+| Değişiklik | Neden? |
+|---|---|
+| **Yatay çevirme** | Aynadaki kedi de kedidir. Her eğitim resminin aynadaki halini ekleyince 209 resim 418 oluyor ve model kedinin hangi tarafa baktığını ezberleyemiyor. |
+| **Sınıf dengeleme** | Eğitim verisinin üçte ikisi "kedi değil" (72 kedi, 137 kedi değil). Model kararsız kaldığında "kedi değil" demeye alışıyordu. Kedi resimlerinden rastgele kopyalar ekleyerek SGD'nin iki sınıfı eşit sıklıkta görmesini sağladım (548 resim, 274 kedi). |
+| **Azalan öğrenme oranı** | `adım = 0.001 / (1 + 0.3 · epoch)`. Başta büyük adımlarla hızlı öğreniyor, sonlarda küçük adımlarla oturuyor. Sabit oranda SGD son epoch'larda zıplayıp iyi bulduğu noktadan uzaklaşabiliyordu. |
+
+Bir değişikliğin gerçekten işe yarayıp yaramadığını tek bir çalıştırmayla anlamak zor; SGD'nin rastgeleliği yüzünden sonuç her seferinde birkaç puan oynuyor. Bu yüzden her ayarı 6 farklı rastgele başlangıçla çalıştırıp ortalamaya baktım:
+
+| Sürüm | Test doğruluğu (6 çalıştırma ortalaması) | Kedileri bilme | Kedi olmayanları bilme |
+|---|---|---|---|
+| İlk sürüm | ≈ %72 (±6) | ≈ %71 | ≈ %74 |
+| + çevirme + dengeleme + azalan öğrenme oranı | **≈ %77 (±3)** | **≈ %78** | **≈ %75** |
+
+Ortalama doğruluk yaklaşık 5 puan arttı ve kazancın çoğu kedileri bilmekten geliyor. Sonuçların çalıştırmadan çalıştırmaya oynaması da yarıya indi (±6 puandan ±3 puana); yani model daha kararlı.
+
+Denediğim ama işe yaramayan şeyler: piksel bazında standardizasyon (z-score), gri tonlamaya çevirme ve resmi 32×32'ye küçültme. Hepsi doğruluğu düşürdü.
+
+## 7. Sonuçlar ve yorumu
+
+Ayarlar: 40 epoch, başlangıç öğrenme oranı 0.001, azalma 0.3. Sabit seed kullanıldığı için sonuçlar her çalıştırmada aynıdır.
 
 ```
-Epoch   1 | MSE kaybı: 0.2252
-Epoch  11 | MSE kaybı: 0.1342
-Epoch  21 | MSE kaybı: 0.0999
-Epoch  31 | MSE kaybı: 0.0888
-Epoch  41 | MSE kaybı: 0.0720
-Epoch  50 | MSE kaybı: 0.0598
-Eğitim doğruluğu: %96.7      Test doğruluğu: %70.0
+Epoch   1 | MSE kaybı: 0.2411
+Epoch  11 | MSE kaybı: 0.1545
+Epoch  21 | MSE kaybı: 0.1359
+Epoch  31 | MSE kaybı: 0.1326
+Epoch  40 | MSE kaybı: 0.1248
+Eğitim doğruluğu: %86.6      Test doğruluğu: %74.0
+Test: 33 kediden 24'ü, 17 kedi olmayandan 13'ü doğru
 ```
+
+Bu çalıştırmanın %74'ü, 6 çalıştırmanın ortalaması olan %77'nin biraz altında; SGD'nin rastgeleliğinden kaynaklanan normal bir oynama.
 
 ### MSE kaybı
 - Karşılaştırma noktası **0.25**. Hiçbir şey bilmeyen ve her resme 0.5 diyen bir modelin hatası her zaman 0.5, karesi 0.25 olur. Yani 0.25 "yazı tura" seviyesidir.
-- **İlk epoch'ta 0.2252:** Yazı turadan çok az iyi; model öğrenmeye yeni başlamış.
-- **11. epoch'ta 0.1342:** Kayıp neredeyse yarıya inmiş; model resimlerin çoğunu doğru tarafa yerleştirmeye başlamış.
-- **50. epoch'ta 0.0598:** Tahminler gerçek etiketten ortalama yaklaşık 0.24 uzakta (√0.06). Model eğitim resimlerinin çoğunda hem doğru hem de oldukça emin.
-- Kayıp sürekli düşüyor ama düşüş giderek yavaşlıyor. Bu beklenen bir durum: kolay resimler önce öğreniliyor.
+- **İlk epoch'ta 0.2411:** Yazı turanın hemen altında; model öğrenmeye yeni başlamış.
+- **11. epoch'ta 0.1545:** Kayıp üçte bir azalmış; model resimleri doğru tarafa ayırmaya başlamış.
+- **40. epoch'ta 0.1248:** Tahminler gerçek etiketten ortalama yaklaşık 0.35 uzakta (√0.125). Model çoğu resimde doğru tarafta ama çok emin değil.
+- İlk sürümde son kayıp 0.06'ydı, yani daha düşüktü. Ama o düşük kayıp ezberin işaretiydi: model eğitim resimlerinde çok emindi, yeni resimlerde ise yanılıyordu. Çevrilmiş ve dengelenmiş veriyi ezberlemek daha zor olduğu için kayıp daha yüksek kalıyor, test doğruluğu ise artıyor.
 
 ### Doğruluk
-- **Eğitim %96.7:** Model gördüğü 209 resmin 202'sini doğru biliyor.
-- **Test %70:** Hiç görmediği 50 resmin 35'ini doğru biliyor.
-- **Aradaki 27 puanlık fark overfitting'i gösteriyor.** Modelde 12288 ağırlık var ama sadece 209 eğitim resmi var; model eğitim resimlerini kısmen ezberliyor.
-- Test setindeki 50 resmin 33'ü kedi. Her resme "kedi" diyen bir model %66 alırdı; perceptron bundan biraz daha iyi. Tek bir nöron pikselleri sadece ağırlıklı olarak topladığı için (lineer karar sınırı) kedi gibi karmaşık bir şekli tam öğrenemiyor. Daha iyi sonuç için çok katmanlı bir ağ ya da CNN gerekir.
-
-### Hiperparametre seçimi
-| Deneme | Sonuç |
-|---|---|
-| Öğrenme oranı 0.05 | Adımlar çok büyük, model öğrenemiyor (test %36) |
-| Öğrenme oranı 0.01 | Test %56 |
-| **Öğrenme oranı 0.001, 50 epoch** | **Test %70 (seçilen ayar)** |
-| 200 epoch | Eğitim %100 oluyor ama test artmıyor: daha fazla ezber |
+- **Eğitim %86.6:** Model orijinal 209 resmin 181'ini doğru biliyor.
+- **Test %74:** Hiç görmediği 50 resmin 37'sini doğru biliyor.
+- **Aradaki 13 puanlık fark** ilk sürümdeki 27 puanın yarısı. Model hâlâ biraz ezberliyor ama çoğunlukla genelleyebiliyor.
+- **Tek nöronun sınırı:** Perceptron pikselleri sadece ağırlıklı olarak toplar (lineer karar sınırı). Kedinin şekli, kulakları, gözleri gibi karmaşık örüntüleri öğrenemez; daha çok renk ve parlaklık dağılımına bakar. Bu yüzden %75–80'in üstüne çıkmak için çok katmanlı bir ağ ya da CNN gerekir.
 
 ### Deneme fotoğrafları
 | Resim | Gerçek | Tahmin | Kedi olasılığı |
 |---|---|---|---|
-| a1.jpg | Kedi | KEDİ | %60 |
-| a2.jpg | Kedi | KEDİ | %76 |
-| a3.jpg | Kedi değil | KEDİ (yanlış) | %61 |
-| a4.jpg | Kedi değil | KEDİ DEĞİL | %20 |
-| a5.jpg | Kedi değil | KEDİ DEĞİL | %46 |
+| a1.jpg | Kedi | KEDİ | %63 |
+| a2.jpg | Kedi | KEDİ | %78 |
+| a3.jpg | Kedi değil | KEDİ (yanlış) | %71 |
+| a4.jpg | Kedi değil | KEDİ DEĞİL | %43 |
+| a5.jpg | Kedi değil | KEDİ (yanlış) | %61 |
 
-5 resmin 4'ü doğru. Olasılıkların çoğu %50'ye yakın; model yeni resimlerde pek emin değil. Bu da %70'lik test doğruluğuyla uyumlu.
+Bu fotoğraflar eğitim verisinden çok farklı: yüksek çözünürlüklü, farklı ışıkta ve farklı kadrajla çekilmiş. Model bu tür resimlerde zorlanıyor ve olasılıklar %50'ye yakın çıkıyor. Kırmızı ve mor tonlu Paris fotoğrafları (a3, a5) renk dağılımı yüzünden kedi sanılıyor.
 
 Olasılığın sözel yorumu:
 | Kedi olasılığı | Yorum |
 |---|---|
-| %80 ve üstü | Kedi olduğundan oldukça emin |
-| %50–80 | Kedi diyor ama sınıra yakın |
-| %20–50 | Kedi değil diyor ama sınıra yakın |
-| %20 ve altı | Kedi olmadığından oldukça emin |
+| %75 ve üstü | Kedi olduğundan oldukça emin |
+| %50–75 | Kedi diyor ama sınıra yakın |
+| %25–50 | Kedi değil diyor ama sınıra yakın |
+| %25 ve altı | Kedi olmadığından oldukça emin |
 
-## 7. Canlı demo nasıl çalışıyor?
+## 8. Canlı demo nasıl çalışıyor?
 
 GitHub Pages sadece statik sayfa yayınlayabilir, Python/Flask çalıştıramaz. Bu yüzden canlı demo (`docs/` klasörü) şöyle çalışıyor:
 
