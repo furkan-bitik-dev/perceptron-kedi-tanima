@@ -31,9 +31,9 @@ function kediOlasiligi(model, kucuk) {
 }
 
 function olasilikYorumla(p) {
-  if (p >= 0.8) return "Model bunun kedi olduğundan oldukça emin.";
+  if (p >= 0.75) return "Model bunun kedi olduğundan oldukça emin.";
   if (p > 0.5) return "Model kedi diyor ama emin değil, sınıra yakın bir karar.";
-  if (p > 0.2) return "Model kedi değil diyor ama emin değil, sınıra yakın bir karar.";
+  if (p > 0.25) return "Model kedi değil diyor ama emin değil, sınıra yakın bir karar.";
   return "Model bunun kedi olmadığından oldukça emin.";
 }
 
